@@ -20,3 +20,13 @@ rules:
 
 
 
+in root composer file add the following to extra:
+    
+```
+ "phpstan-package-boundaries-plugin": {
+            "packages_path": "packages",
+            "whitelist_packages": [
+                "shared"
+            ]
+        }
+```
