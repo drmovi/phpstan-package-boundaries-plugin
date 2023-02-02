@@ -1,0 +1,22 @@
+{
+  "name": "drmovi/phpstan-package-boundaries-plugin",
+  "description": "PhpStan rule to set boundaries between packages",
+  "type": "phpstan-plugin",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Drmovi\\PackageBoundaries\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "drmovi",
+      "email": "drmovi000@gmail.com"
+    }
+  ],
+  "minimum-stability": "stable",
+  "require": {
+    "php": ">=8.1",
+    "phpstan/phpstan": ">=1.9"
+  }
+}
