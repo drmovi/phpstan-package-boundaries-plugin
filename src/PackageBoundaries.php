@@ -11,8 +11,8 @@ class PackageBoundaries
 {
 
     private static $composerData = null;
-    private string $packagesFolder = 'packages';
-    private array $whitelistPackages = ['shared'];
+    private ?string $packagesFolder = null;
+    private array $whitelistPackages = [];
 
     public function getNodeType(): string
     {
@@ -23,6 +23,9 @@ class PackageBoundaries
     {
 
         $this->loadSettings();
+        if (!$this->packagesFolder) {
+            return [];
+        }
 
         if (!$this->isFileInPackage($scope)) {
             return [];
@@ -108,9 +111,9 @@ class PackageBoundaries
         if (self::$composerData) {
             return;
         }
-        self::$composerData =  json_decode(file_get_contents(getcwd() . '/composer.json'), true);
+        self::$composerData = json_decode(file_get_contents(getcwd() . '/composer.json'), true);
         $data = self::$composerData['extra']['phpstan-package-boundaries-plugin'];
-        $this->packagesFolder = $data['packages_path'] ?? $this->packagesFolder;
-        $this->whitelistPackages = $data['whitelist_packages'] ?? $this->whitelistPackages;
+        $this->packagesFolder = $data['packages_path'] ?? null;
+        $this->whitelistPackages = $data['whitelist_packages'] ?? [];
     }
 }
