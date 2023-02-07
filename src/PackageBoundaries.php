@@ -11,8 +11,10 @@ class PackageBoundaries
 {
 
     private static $composerData = null;
-    private ?string $packagesFolder = null;
-    private array $whitelistPackages = [];
+    private ?string $packagesPath = null;
+    private ?string $sharedPackagesPath = null;
+    private ?string $appPath = null;
+
 
     public function getNodeType(): string
     {
@@ -23,16 +25,14 @@ class PackageBoundaries
     {
 
         $this->loadSettings();
-        if (!$this->packagesFolder) {
+        if (!$this->packagesPath) {
             return [];
         }
 
-        if (!$this->isFileInPackage($scope)) {
-            return [];
-        }
-
-        $scopeMicroservice = $this->getPackageFromScope($scope);
-
+        $isPackageScope = $this->isFileInPackage($scope);
+        $isSharedPackageScope = $this->isFileInSharedPackage($scope);
+        $isAppScope = $this->isFileInApp($scope);
+        $packageScopeName = $this->getPackageFromScope($scope);
         $handler = (new HandlerFactory())->create($node, $scope);
         if (!$handler) {
             return [];
@@ -43,38 +43,35 @@ class PackageBoundaries
             return [];
         }
 
-        $classesInMicroservice = [];
+        $classesInPackages = [];
         foreach ($classes as $class) {
-            if ($this->isClassInPackage($class)) {
-                $classesInMicroservice[] = $class;
+            if ($this->isClassInPackage($class) || $this->isClassInSharedPackage($class)) {
+                $classesInPackages[] = $class;
             }
         }
-        if (empty($classesInMicroservice)) {
+        if (empty($classesInPackages)) {
             return [];
         }
 
-        $nodesMicroservices = [];
-        foreach ($classesInMicroservice as $class) {
-            $nodesMicroservices[$class] = $this->getPackageNameFromClassName($class);
-        }
-
-        if (empty($nodesMicroservices)) {
-            return [];
+        $packages = [];
+        foreach ($classesInPackages as $class) {
+            $packages[$class] = $this->getPackageNameFromClassName($class);
         }
 
 
-        $nonWhiteListedMicroservices = [];
-        foreach ($nodesMicroservices as $class => $microservice) {
-            if (!in_array($microservice, $this->whitelistPackages)) {
-                $nonWhiteListedMicroservices[$class] = $microservice;
-            }
-        }
         $classesViolations = [];
-        foreach ($nonWhiteListedMicroservices as $class => $nodeMicroservice) {
-            if ($scopeMicroservice != $nodeMicroservice) {
-                $classesViolations[] = RuleErrorBuilder::message(sprintf('Microservice %s is not allowed to use %s', $scopeMicroservice, $class))->build();
+        foreach ($packages as $class => $package) {
+            if ($isPackageScope && $packageScopeName != $package) {
+                $classesViolations[] = RuleErrorBuilder::message(sprintf('Package %s is not allowed to use %s', $packageScopeName, $class))->build();
+            }
+            if ($isSharedPackageScope && $this->isClassInPackage($class)) {
+                $classesViolations[] = RuleErrorBuilder::message(sprintf('Package %s is not allowed to use %s', $packageScopeName, $class))->build();
+            }
+            if ($isAppScope && ($this->isClassInPackage($class) || $this->isClassInSharedPackage($class))) {
+                $classesViolations[] = RuleErrorBuilder::message(sprintf('The main app is not allowed to use %s', $class))->build();
             }
         }
+
         if (empty($classesViolations)) {
             return [];
         }
@@ -85,7 +82,12 @@ class PackageBoundaries
 
     private function isFileInPackage(Scope $scope): bool
     {
-        return str_starts_with(trim(str_replace(getcwd(), '', $scope->getFile()), '/'), $this->packagesFolder);
+        return str_starts_with(trim(str_replace(getcwd(), '', $scope->getFile()), '/'), $this->packagesPath);
+    }
+
+    private function isFileInSharedPackage(Scope $scope): bool
+    {
+        return str_starts_with(trim(str_replace(getcwd(), '', $scope->getFile()), '/'), $this->sharedPackagesPath);
     }
 
     private function getPackageFromScope(Scope $scope): string
@@ -102,7 +104,12 @@ class PackageBoundaries
 
     private function isClassInPackage(string $class): bool
     {
-        return str_starts_with(trim(str_replace(getcwd(), '', (new \ReflectionClass($class))->getFileName()), '/'), $this->packagesFolder);
+        return str_starts_with(trim(str_replace(getcwd(), '', (new \ReflectionClass($class))->getFileName()), '/'), $this->packagesPath);
+    }
+
+    private function isClassInApp(string $class): bool
+    {
+        return str_starts_with(trim(str_replace(getcwd(), '', (new \ReflectionClass($class))->getFileName()), '/'), $this->appPath);
     }
 
 
@@ -113,7 +120,19 @@ class PackageBoundaries
         }
         self::$composerData = json_decode(file_get_contents(getcwd() . '/composer.json'), true);
         $data = self::$composerData['extra']['phpstan-package-boundaries-plugin'];
-        $this->packagesFolder = $data['packages_path'] ?? null;
-        $this->whitelistPackages = $data['whitelist_packages'] ?? [];
+        $this->packagesPath = $data['packages_path'] ?? null;
+        $this->sharedPackagesPath = $data['shared_packages_path'] ?? null;
+        $this->appPath = $data['app_path'] ?? null;
+    }
+
+    private function isClassInSharedPackage(mixed $class): bool
+    {
+        return str_starts_with(trim(str_replace(getcwd(), '', (new \ReflectionClass($class))->getFileName()), '/'), $this->sharedPackagesPath);
+
+    }
+
+    private function isFileInApp(Scope $scope): bool
+    {
+        return str_starts_with(trim(str_replace(getcwd(), '', $scope->getFile()), '/'), $this->appPath);
     }
 }
